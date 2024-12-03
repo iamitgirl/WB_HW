@@ -1,106 +1,91 @@
 -- Часть 2.
 -- 1.
-SELECT
-    sl.SHOPNUMBER,
+SELECT 
+    s.SHOPNUMBER,
     sh.CITY,
     sh.ADDRESS,
-    SUM(sl.QTY) AS SUM_QTY,
-    SUM(sl.QTY * g.PRICE) AS SUM_QTY_PRICE
-FROM
-    sales sl
-JOIN
-    shops sh ON sl.SHOPNUMBER = sh.SHOPNUMBER
-JOIN
-    goods g ON sl.ID_GOOD = g.ID_GOOD
-WHERE
-    TO_DATE(sl.DATE, 'DD/MM/YYYY') = '02-01-2016'
-GROUP BY
-    sl.SHOPNUMBER, sh.CITY, sh.ADDRESS;
+    SUM(s.QTY) AS SUM_QTY,
+    SUM(s.QTY * g.PRICE) AS SUM_QTY_PRICE
+FROM 
+    sales s
+JOIN 
+    shops sh ON s.SHOPNUMBER = sh.SHOPNUMBER
+JOIN 
+    goods g ON s.ID_GOOD = g.ID_GOOD
+WHERE 
+    s.DATE = '2/1/2016'
+GROUP BY 
+    s.SHOPNUMBER, sh.CITY, sh.ADDRESS
+ORDER BY 
+    s.SHOPNUMBER;
     
 -- 2.
-WITH sales_by_date AS (
-    SELECT
-        sl.DATE AS DATE_,
-        sh.CITY,
-        SUM(sl.QTY * g.PRICE) AS SUM_SALES
-    FROM
-        sales sl
-    JOIN
-        shops sh ON sl.SHOPNUMBER = sh.SHOPNUMBER
-    JOIN
-        goods g ON sl.ID_GOOD = g.ID_GOOD
-    WHERE
-        g.CATEGORY = 'ЧИСТОТА'
-    GROUP BY
-        sl.DATE, sh.CITY
-),
-total_sales AS (
-    SELECT
-        DATE_,
-        SUM(SUM_SALES) OVER (PARTITION BY DATE_) AS TOTAL_SALES
-    FROM
-        sales_by_date
-)
-SELECT
-    sb.DATE_,
-    sb.CITY,
-    sb.SUM_SALES / ts.TOTAL_SALES AS SUM_SALES_REL
-FROM
-    sales_by_date sb
-JOIN
-    total_sales ts ON sb.DATE_ = ts.DATE_;
+SELECT 
+    s.DATE AS DATE_,
+    sh.CITY,
+    SUM(s.QTY * g.PRICE) / SUM(SUM(s.QTY * g.PRICE)) OVER (PARTITION BY s.DATE) AS SUM_SALES_REL
+FROM 
+    sales s
+JOIN 
+    goods g ON s.ID_GOOD = g.ID_GOOD
+JOIN 
+    shops sh ON s.SHOPNUMBER = sh.SHOPNUMBER
+WHERE 
+    g.CATEGORY = 'ЧИСТОТА'
+GROUP BY 
+    s.DATE, sh.CITY;
 
 -- 3.
-WITH ranked_sales AS (
-    SELECT
-        sl.DATE AS DATE_,
-        sl.SHOPNUMBER,
-        sl.ID_GOOD,
-        sl.QTY,
-        RANK() OVER (PARTITION BY sl.DATE, sl.SHOPNUMBER ORDER BY sl.QTY DESC) AS RANK_
-    FROM
-        sales sl
+WITH RankedSales AS (
+    SELECT 
+        s.DATE AS DATE_,
+        s.SHOPNUMBER,
+        s.ID_GOOD,
+        s.QTY,
+        RANK() OVER (PARTITION BY s.DATE, s.SHOPNUMBER ORDER BY s.QTY DESC) AS rnk
+    FROM 
+        sales s
 )
-SELECT
+SELECT 
     DATE_,
     SHOPNUMBER,
     ID_GOOD
-FROM
-    ranked_sales
-WHERE
-    RANK_ <= 3;
+FROM 
+    RankedSales
+WHERE 
+    rnk <= 3
+ORDER BY 
+    DATE_, SHOPNUMBER, rnk;
 
 -- 4.
-WITH sales_with_lag AS (
-    SELECT
-        sl.DATE AS DATE_,
-        sl.SHOPNUMBER,
+WITH PrevDaySales AS (
+    SELECT 
+        s.DATE AS DATE_,
+        s.SHOPNUMBER,
         g.CATEGORY,
-        SUM(sl.QTY * g.PRICE) AS SUM_SALES,
-        LAG(SUM(sl.QTY * g.PRICE)) OVER (
-            PARTITION BY sl.SHOPNUMBER, g.CATEGORY
-            ORDER BY sl.DATE
-        ) AS PREV_SALES
-    FROM
-        sales sl
-    JOIN
-        shops sh ON sl.SHOPNUMBER = sh.SHOPNUMBER
-    JOIN
-        goods g ON sl.ID_GOOD = g.ID_GOOD
-    WHERE
+        SUM(s.QTY * g.PRICE) AS SALES_RUB,
+        LAG(SUM(s.QTY * g.PRICE)) OVER (PARTITION BY s.SHOPNUMBER, g.CATEGORY ORDER BY s.DATE) AS PREV_SALES
+    FROM 
+        sales s
+    JOIN 
+        goods g ON s.ID_GOOD = g.ID_GOOD
+    JOIN 
+        shops sh ON s.SHOPNUMBER = sh.SHOPNUMBER
+    WHERE 
         sh.CITY = 'СПб'
-    GROUP BY
-        sl.DATE, sl.SHOPNUMBER, g.CATEGORY
+    GROUP BY 
+        s.DATE, s.SHOPNUMBER, g.CATEGORY
 )
-SELECT
+SELECT 
     DATE_,
     SHOPNUMBER,
     CATEGORY,
     PREV_SALES
-FROM
-    sales_with_lag
-WHERE
+FROM 
+    PrevDaySales
+WHERE 
     PREV_SALES IS NOT NULL;
+
 
 -- Часть 3.
 -- Создадим таблицу query.
